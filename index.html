@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Suit Jitsu</title>
-    <link rel="stylesheet" href="styles.css?v=result-screens-1">
+    <link rel="stylesheet" href="styles.css?v=boost-cutscenes-1">
   </head>
   <body>
     <main class="shell">
@@ -40,11 +40,18 @@
 
         <section class="result-screen" id="resultScreen" aria-labelledby="resultTitle" aria-live="polite" hidden>
           <div class="result-panel">
-            <div class="result-kicker" id="resultKicker">Victory</div>
-            <h2 id="resultTitle">Clean Shot</h2>
-            <p id="resultText">The duel ends before the echo fades.</p>
-            <div class="result-stat" id="resultStat">Reaction: --</div>
-            <button id="resultButton" type="button">Continue</button>
+            <img id="resultImage" alt="" src="assets/results/victory-shot.png">
+            <div class="result-copy">
+              <div class="result-kicker" id="resultKicker">Victory</div>
+              <h2 id="resultTitle">Clean Shot</h2>
+              <p id="resultText">The duel ends before the echo fades.</p>
+              <div class="result-stat" id="resultStat">Reaction: --</div>
+              <div class="result-meta" id="resultMeta" hidden>
+                <span id="resultOpponent">Opponent: --</span>
+                <span id="resultBest">Best Reaction: --</span>
+              </div>
+              <button id="resultButton" type="button">Continue</button>
+            </div>
           </div>
         </section>
 
@@ -94,6 +101,6 @@
       </section>
     </main>
 
-    <script src="game.js?v=result-screens-1"></script>
+    <script src="game.js?v=boost-cutscenes-1"></script>
   </body>
 </html>

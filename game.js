@@ -25,6 +25,10 @@ const ui = {
   resultTitle: document.getElementById("resultTitle"),
   resultText: document.getElementById("resultText"),
   resultStat: document.getElementById("resultStat"),
+  resultImage: document.getElementById("resultImage"),
+  resultMeta: document.getElementById("resultMeta"),
+  resultOpponent: document.getElementById("resultOpponent"),
+  resultBest: document.getElementById("resultBest"),
   resultButton: document.getElementById("resultButton")
 };
 
@@ -65,6 +69,13 @@ const musicTracks = {
   }
 };
 
+const resultArtwork = {
+  "victory-shot": "assets/results/victory-shot.png",
+  "victory-dodge": "assets/results/victory-dodge.png",
+  "gameover-shot": "assets/results/gameover-shot.png",
+  "gameover-miss": "assets/results/gameover-miss.png"
+};
+
 const music = new Audio();
 music.loop = true;
 music.preload = "auto";
@@ -94,7 +105,7 @@ const game = {
   boostCueAt: 0,
   boostCueEnd: 0,
   boostCueHit: false,
-  boostBurst: 0,
+  wasBoosting: false,
   boostPromptUntil: 0,
   currentMusicKey: "",
   victoryType: "",
@@ -150,24 +161,26 @@ function update(dt, now) {
   if (game.phase === "playerAim" || game.phase === "enemyAim") updateReaction(now);
   if (game.phase === "punch" && now - game.phaseStarted > 1450) showVictoryScreen();
   if (game.resultFlash > 0) game.resultFlash = Math.max(0, game.resultFlash - dt);
-  if (game.boostBurst > 0) game.boostBurst = Math.max(0, game.boostBurst - dt * 1.05);
 }
 
 function updateRace(dt, now) {
   const boost = isBoosting();
+  const boostStarted = boost && !game.wasBoosting;
   const basePlayerSpeed = 246 + Math.min(42, game.level * 2);
   const boostWindowLive = game.level >= 2 && now >= game.boostCueAt && now <= game.boostCueEnd;
   const boostSpeed = boost && game.stamina > 0 ? 166 : 0;
-  const signalBurst = game.boostBurst > 0 ? 315 * game.boostBurst : 0;
   const opponentSpeed = 214 + game.level * 41 + Math.min(120, game.level * 8);
 
-  if (game.level >= 2 && boostWindowLive && boost && !game.boostCueHit && game.stamina > 0) {
+  if (game.level >= 2 && boostWindowLive && boostStarted && !game.boostCueHit && game.stamina > 0) {
     game.boostCueHit = true;
-    game.boostBurst = 1;
     game.boostPromptUntil = now + 950;
     game.stamina = Math.min(100, game.stamina + 10);
-    game.message = "Perfect boost. You broke the opponent's pace.";
+    game.playerX = TRACK_FINISH + 22;
+    game.message = "Perfect boost. You vanished to the pistol.";
     playMidiSfx("boost");
+    game.wasBoosting = boost;
+    beginPlayerAim(now);
+    return;
   }
 
   if (boost && game.stamina > 0) {
@@ -175,6 +188,7 @@ function updateRace(dt, now) {
     if (game.stamina <= 0) {
       game.stamina = 0;
       game.exhausted = true;
+      game.wasBoosting = boost;
       die("Exhausted", "You burned your stamina out before the draw.", "shot");
       return;
     }
@@ -182,7 +196,7 @@ function updateRace(dt, now) {
     game.stamina = Math.min(100, game.stamina + 8 * dt);
   }
 
-  game.playerX += (basePlayerSpeed + boostSpeed + signalBurst) * dt;
+  game.playerX += (basePlayerSpeed + boostSpeed) * dt;
   game.enemyX += opponentSpeed * dt;
 
   const playerDone = game.playerX >= TRACK_FINISH;
@@ -195,6 +209,8 @@ function updateRace(dt, now) {
       beginEnemyAim(now);
     }
   }
+
+  game.wasBoosting = boost;
 }
 
 function updateReaction(now) {
@@ -305,12 +321,11 @@ function resetRace() {
   game.enemyX = TRACK_START;
   game.phaseStarted = performance.now();
   game.pendingRaceResetAt = 0;
-  game.boostBurst = 0;
   game.boostCueHit = false;
+  game.wasBoosting = isBoosting();
   game.boostPromptUntil = 0;
   if (game.level >= 2) {
-    game.boostCueAt = game.phaseStarted + randomRange(760, 1650);
-    game.boostCueEnd = game.boostCueAt + Math.max(650, 1120 - game.level * 35);
+    scheduleBoostCue(game.phaseStarted);
     game.message = `Opponent ${game.level}: faster pace. Boost only when signaled.`;
   } else {
     game.boostCueAt = 0;
@@ -319,6 +334,19 @@ function resetRace() {
   }
   selectMusicForPhase("race");
   clearPrompt();
+}
+
+function scheduleBoostCue(startTime) {
+  const opponentSpeed = 214 + game.level * 41 + Math.min(120, game.level * 8);
+  const opponentFinishMs = ((TRACK_FINISH - TRACK_START) / opponentSpeed) * 1000;
+  const safetyLead = Math.min(220, Math.max(80, opponentFinishMs * 0.18));
+  const cueWindow = Math.min(430, Math.max(190, opponentFinishMs * 0.24));
+  const latestStart = Math.max(90, opponentFinishMs - safetyLead - cueWindow);
+  const earliestStart = Math.min(latestStart, Math.max(70, latestStart * 0.42));
+  const cueOffset = randomRange(earliestStart, latestStart);
+
+  game.boostCueAt = startTime + cueOffset;
+  game.boostCueEnd = Math.min(game.boostCueAt + cueWindow, startTime + opponentFinishMs - safetyLead);
 }
 
 function beginPlayerAim(now) {
@@ -393,7 +421,8 @@ function showVictoryScreen() {
       title: "Three Dodges",
       text: "You read every draw, slipped three laser lines, and ended the duel with a final suit-jitsu strike.",
       stat: `${game.victoryText} Best: ${formatReaction(game.bestReaction)}`,
-      button: "Next Opponent"
+      button: "Next Opponent",
+      showStats: false
     });
     return;
   }
@@ -404,7 +433,8 @@ function showVictoryScreen() {
     title: "Clean Shot",
     text: "You reached the pistol first and fired before the opponent could vanish from the lane.",
     stat: `${game.victoryText} Best: ${formatReaction(game.bestReaction)}`,
-    button: "Next Opponent"
+    button: "Next Opponent",
+    showStats: false
   });
 }
 
@@ -416,7 +446,8 @@ function showGameOverScreen(type, reason) {
       title: "Empty Holster",
       text: "Three chances were spent and the opponent stayed standing. In Suit Jitsu, hesitation is expensive.",
       stat: reason,
-      button: "Restart"
+      button: "Restart",
+      showStats: true
     });
     return;
   }
@@ -427,17 +458,22 @@ function showGameOverScreen(type, reason) {
     title: "Laser Hit",
     text: "The opponent won the draw and the laser found its mark before you could clear the line.",
     stat: reason,
-    button: "Restart"
+    button: "Restart",
+    showStats: true
   });
 }
 
-function showResultScreen({ className, kicker, title, text, stat, button }) {
+function showResultScreen({ className, kicker, title, text, stat, button, showStats }) {
   ui.resultScreen.hidden = false;
   ui.resultScreen.className = `result-screen ${className}`;
+  ui.resultImage.src = resultArtwork[className] || resultArtwork["victory-shot"];
   ui.resultKicker.textContent = kicker;
   ui.resultTitle.textContent = title;
   ui.resultText.textContent = text;
   ui.resultStat.textContent = stat;
+  ui.resultMeta.hidden = !showStats;
+  ui.resultOpponent.textContent = `Lost On Opponent: ${game.level}`;
+  ui.resultBest.textContent = `Best Reaction: ${formatReaction(game.bestReaction)}`;
   ui.resultButton.textContent = button;
 }
 
