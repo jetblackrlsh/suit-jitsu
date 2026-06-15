@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Suit Jitsu</title>
-    <link rel="stylesheet" href="styles.css?v=audio-boost-4">
+    <link rel="stylesheet" href="styles.css?v=result-screens-1">
   </head>
   <body>
     <main class="shell">
@@ -37,6 +37,16 @@
         </div>
 
         <div class="boost-cue" id="boostCue" aria-live="polite">Boost</div>
+
+        <section class="result-screen" id="resultScreen" aria-labelledby="resultTitle" aria-live="polite" hidden>
+          <div class="result-panel">
+            <div class="result-kicker" id="resultKicker">Victory</div>
+            <h2 id="resultTitle">Clean Shot</h2>
+            <p id="resultText">The duel ends before the echo fades.</p>
+            <div class="result-stat" id="resultStat">Reaction: --</div>
+            <button id="resultButton" type="button">Continue</button>
+          </div>
+        </section>
 
         <aside class="pause-menu" id="pauseMenu" aria-labelledby="pauseTitle" aria-modal="true" role="dialog" hidden>
           <div class="pause-panel">
@@ -84,6 +94,6 @@
       </section>
     </main>
 
-    <script src="game.js?v=audio-boost-4"></script>
+    <script src="game.js?v=result-screens-1"></script>
   </body>
 </html>

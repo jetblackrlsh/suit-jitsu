@@ -19,7 +19,13 @@ const ui = {
   musicVolume: document.getElementById("musicVolume"),
   sfxVolume: document.getElementById("sfxVolume"),
   trackSelect: document.getElementById("trackSelect"),
-  audioButton: document.getElementById("audioButton")
+  audioButton: document.getElementById("audioButton"),
+  resultScreen: document.getElementById("resultScreen"),
+  resultKicker: document.getElementById("resultKicker"),
+  resultTitle: document.getElementById("resultTitle"),
+  resultText: document.getElementById("resultText"),
+  resultStat: document.getElementById("resultStat"),
+  resultButton: document.getElementById("resultButton")
 };
 
 const WIDTH = canvas.width;
@@ -90,7 +96,9 @@ const game = {
   boostCueHit: false,
   boostBurst: 0,
   boostPromptUntil: 0,
-  currentMusicKey: ""
+  currentMusicKey: "",
+  victoryType: "",
+  victoryText: ""
 };
 
 initAudioControls();
@@ -140,7 +148,7 @@ function update(dt, now) {
   }
   if (game.phase === "race") updateRace(dt, now);
   if (game.phase === "playerAim" || game.phase === "enemyAim") updateReaction(now);
-  if (game.phase === "punch" && now - game.phaseStarted > 1450) nextOpponent();
+  if (game.phase === "punch" && now - game.phaseStarted > 1450) showVictoryScreen();
   if (game.resultFlash > 0) game.resultFlash = Math.max(0, game.resultFlash - dt);
   if (game.boostBurst > 0) game.boostBurst = Math.max(0, game.boostBurst - dt * 1.05);
 }
@@ -167,7 +175,7 @@ function updateRace(dt, now) {
     if (game.stamina <= 0) {
       game.stamina = 0;
       game.exhausted = true;
-      die("Exhausted", "You burned your stamina out before the draw.");
+      die("Exhausted", "You burned your stamina out before the draw.", "shot");
       return;
     }
   } else {
@@ -215,7 +223,7 @@ function updateReaction(now) {
   if (game.phase === "playerAim") {
     missShot("Too slow. The opponent slipped the line of fire.");
   } else {
-    die("Shot", "Too slow. The laser found you first.");
+    die("Shot", "Too slow. The laser found you first.", "shot");
   }
 }
 
@@ -224,6 +232,10 @@ function handleAction(action) {
   unlockAudio();
   if (game.phase === "loading") return;
   if (game.paused) return;
+  if (game.phase === "victory") {
+    if (action === "shoot") nextOpponent();
+    return;
+  }
   if (game.phase === "menu" || game.phase === "gameOver") {
     if (action === "shoot") startRun();
     return;
@@ -239,7 +251,7 @@ function handleAction(action) {
       const reaction = Math.round(now - game.signalAt);
       game.lastReaction = reaction;
       game.bestReaction = game.bestReaction === null ? reaction : Math.min(game.bestReaction, reaction);
-      beginPunch(now, `Hit in ${reaction} ms.`);
+      beginPunch(now, `Hit in ${reaction} ms.`, "shot");
       return;
     }
     missShot("Late shot. Your opponent rolled under it.");
@@ -247,7 +259,7 @@ function handleAction(action) {
 
   if (game.phase === "enemyAim" && action === "dodge") {
     if (now < game.signalAt) {
-      die("False Dodge", "You moved early and the opponent adjusted.");
+      die("False Dodge", "You moved early and the opponent adjusted.", "shot");
       return;
     }
     if (now <= game.deadline) {
@@ -258,7 +270,7 @@ function handleAction(action) {
       game.dodges += 1;
       game.resultFlash = 0.42;
       if (game.dodges >= 3) {
-        beginPunch(now, `Third dodge in ${reaction} ms.`);
+        beginPunch(now, `Third dodge in ${reaction} ms.`, "dodge");
       } else {
         game.stamina = Math.min(100, game.stamina + 14);
         game.message = `Clean dodge in ${reaction} ms. Race again for the pistol.`;
@@ -269,11 +281,12 @@ function handleAction(action) {
       return;
     }
     playMidiSfx("shoot");
-    die("Shot", "The dodge came too late.");
+    die("Shot", "The dodge came too late.", "shot");
   }
 }
 
 function startRun() {
+  hideResultScreen();
   game.level = 1;
   game.stamina = 100;
   game.bestReaction = null;
@@ -332,7 +345,7 @@ function missShot(reason) {
   game.shotsLeft -= 1;
   game.resultFlash = 0.5;
   if (game.shotsLeft <= 0) {
-    die("Out Of Shots", `${reason} You used all three chances.`);
+    die("Out Of Shots", `${reason} You used all three chances.`, "miss");
     return;
   }
   game.stamina = Math.min(100, game.stamina + 10);
@@ -342,26 +355,95 @@ function missShot(reason) {
   scheduleRaceReset(950);
 }
 
-function beginPunch(now, text) {
+function beginPunch(now, text, victoryType) {
   game.phase = "punch";
   game.phaseStarted = now;
   game.resultFlash = 0.8;
+  game.victoryType = victoryType;
+  game.victoryText = text;
   game.message = `${text} Final punch finishes the duel.`;
-  setPrompt("Knockout", "Advancing to the next opponent.", "win");
+  setPrompt("Knockout", "Final strike confirmed.", "win");
   playMidiSfx("punch");
 }
 
 function nextOpponent() {
+  hideResultScreen();
   game.level += 1;
   game.stamina = Math.min(100, game.stamina + 32);
   startOpponent();
 }
 
-function die(title, text) {
+function die(title, text, type = "shot") {
   game.phase = "gameOver";
   game.message = text;
-  setPrompt(title, `${text} Press Space, Enter, or Xbox A to restart.`, "hot");
+  clearPrompt();
+  showGameOverScreen(type, text);
   selectMusicForPhase("lose");
+}
+
+function showVictoryScreen() {
+  if (game.phase === "victory") return;
+  game.phase = "victory";
+  clearPrompt();
+
+  if (game.victoryType === "dodge") {
+    showResultScreen({
+      className: "victory-dodge",
+      kicker: "Victory By Evasion",
+      title: "Three Dodges",
+      text: "You read every draw, slipped three laser lines, and ended the duel with a final suit-jitsu strike.",
+      stat: `${game.victoryText} Best: ${formatReaction(game.bestReaction)}`,
+      button: "Next Opponent"
+    });
+    return;
+  }
+
+  showResultScreen({
+    className: "victory-shot",
+    kicker: "Victory By Draw",
+    title: "Clean Shot",
+    text: "You reached the pistol first and fired before the opponent could vanish from the lane.",
+    stat: `${game.victoryText} Best: ${formatReaction(game.bestReaction)}`,
+    button: "Next Opponent"
+  });
+}
+
+function showGameOverScreen(type, reason) {
+  if (type === "miss") {
+    showResultScreen({
+      className: "gameover-miss",
+      kicker: "Game Over",
+      title: "Empty Holster",
+      text: "Three chances were spent and the opponent stayed standing. In Suit Jitsu, hesitation is expensive.",
+      stat: reason,
+      button: "Restart"
+    });
+    return;
+  }
+
+  showResultScreen({
+    className: "gameover-shot",
+    kicker: "Game Over",
+    title: "Laser Hit",
+    text: "The opponent won the draw and the laser found its mark before you could clear the line.",
+    stat: reason,
+    button: "Restart"
+  });
+}
+
+function showResultScreen({ className, kicker, title, text, stat, button }) {
+  ui.resultScreen.hidden = false;
+  ui.resultScreen.className = `result-screen ${className}`;
+  ui.resultKicker.textContent = kicker;
+  ui.resultTitle.textContent = title;
+  ui.resultText.textContent = text;
+  ui.resultStat.textContent = stat;
+  ui.resultButton.textContent = button;
+}
+
+function hideResultScreen() {
+  ui.resultScreen.hidden = true;
+  ui.resultScreen.className = "result-screen";
 }
 
 function setPrompt(title, text, tone = "") {
@@ -677,6 +759,13 @@ function initAudioControls() {
 
   ui.resumeButton.addEventListener("click", () => setPaused(false));
   ui.audioButton.addEventListener("click", () => togglePause(true));
+  ui.resultButton.addEventListener("click", () => {
+    if (game.phase === "victory") {
+      nextOpponent();
+    } else if (game.phase === "gameOver") {
+      startRun();
+    }
+  });
   ui.musicToggle.addEventListener("change", () => {
     audioSettings.musicEnabled = ui.musicToggle.checked;
     applyAudioSettings(true);
@@ -820,6 +909,10 @@ function playTone(start, duration, frequency, waveType, peakGain) {
 
 function midiToFrequency(note) {
   return 440 * Math.pow(2, (note - 69) / 12);
+}
+
+function formatReaction(reaction) {
+  return reaction === null ? "--" : `${reaction} ms`;
 }
 
 function randomRange(min, max) {
