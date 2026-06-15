@@ -42,6 +42,7 @@ const PERFECT_BOOST_COST = 50;
 
 const assets = {
   dojo: loadImage("assets/dojo-track.png"),
+  title: loadImage("assets/title-screen.png"),
   fighter: loadImage("assets/fighter.png"),
   pistol: loadImage("assets/laser-pistol.png")
 };
@@ -537,6 +538,13 @@ function draw(now) {
 }
 
 function drawBackground() {
+  if (game.phase === "menu" && assets.title.complete) {
+    coverImage(assets.title, 0, 0, WIDTH, HEIGHT);
+    ctx.fillStyle = "rgba(0, 0, 0, 0.22)";
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    return;
+  }
+
   if (assets.dojo.complete) {
     coverImage(assets.dojo, 0, 0, WIDTH, HEIGHT);
   } else {

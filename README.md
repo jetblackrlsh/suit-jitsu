@@ -21,4 +21,4 @@ Publish this repository from the `main` branch root in GitHub Pages settings.
 
 ## Assets
 
-The dojo track, suited martial artist, black laser pistol, and result-screen cut-scene PNG assets were generated with the built-in ChatGPT image generation capability, then copied into `assets/` for local static use. Music tracks live in `assets/Music/`; short MIDI-style laser, dodge, countdown, boost, and punch effects are synthesized in the browser.
+The title screen, dojo track, suited martial artist, black laser pistol, and result-screen cut-scene PNG assets were generated with the built-in ChatGPT image generation capability, then copied into `assets/` for local static use. Music tracks live in `assets/Music/`; short MIDI-style laser, dodge, countdown, boost, and punch effects are synthesized in the browser.
