@@ -4,7 +4,7 @@ Suit Jitsu is a static single-player browser arcade game for GitHub Pages.
 
 Race suited martial artists across an indoor dojo track, manage stamina with boost, grab the black laser pistol first, and survive reaction-time shoot or dodge challenges against increasingly faster opponents.
 
-From opponent 2 onward, timed boost cues can trigger a Perfect Boost if boost is pressed inside the short signal window, sending the player straight to the pistol.
+From opponent 2 onward, timed boost cues can trigger a Perfect Boost if boost is pressed inside the short signal window with at least 50 stamina, spending 50 stamina and sending the player straight to the pistol.
 
 ## Play
 
@@ -21,4 +21,4 @@ Publish this repository from the `main` branch root in GitHub Pages settings.
 
 ## Assets
 
-The dojo track, suited martial artist, black laser pistol, and result-screen cut-scene PNG assets were generated with the built-in ChatGPT image generation capability, then copied into `assets/` for local static use. Music tracks live in `assets/Music/`; short MIDI-style laser, dodge, boost, and punch effects are synthesized in the browser.
+The dojo track, suited martial artist, black laser pistol, and result-screen cut-scene PNG assets were generated with the built-in ChatGPT image generation capability, then copied into `assets/` for local static use. Music tracks live in `assets/Music/`; short MIDI-style laser, dodge, countdown, boost, and punch effects are synthesized in the browser.

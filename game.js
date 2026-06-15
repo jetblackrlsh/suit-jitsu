@@ -38,6 +38,7 @@ const TRACK_START = 118;
 const TRACK_FINISH = 1064;
 const PLAYER_Y = 548;
 const ENEMY_Y = 418;
+const PERFECT_BOOST_COST = 50;
 
 const assets = {
   dojo: loadImage("assets/dojo-track.png"),
@@ -95,6 +96,7 @@ const game = {
   signalAt: 0,
   deadline: 0,
   reactionWindow: 0,
+  lastCountdownBeep: null,
   bestReaction: null,
   lastReaction: null,
   resultFlash: 0,
@@ -171,16 +173,24 @@ function updateRace(dt, now) {
   const boostSpeed = boost && game.stamina > 0 ? 166 : 0;
   const opponentSpeed = 214 + game.level * 41 + Math.min(120, game.level * 8);
 
-  if (game.level >= 2 && boostWindowLive && boostStarted && !game.boostCueHit && game.stamina > 0) {
+  if (boostStarted && game.stamina > 0) {
+    playMidiSfx(boostWindowLive ? "boostCuePress" : "boostStart");
+  }
+
+  if (game.level >= 2 && boostWindowLive && boostStarted && !game.boostCueHit && game.stamina >= PERFECT_BOOST_COST) {
     game.boostCueHit = true;
     game.boostPromptUntil = now + 950;
-    game.stamina = Math.min(100, game.stamina + 10);
+    game.stamina = Math.max(0, game.stamina - PERFECT_BOOST_COST);
     game.playerX = TRACK_FINISH + 22;
-    game.message = "Perfect boost. You vanished to the pistol.";
+    game.message = "Perfect boost. 50 stamina spent. You vanished to the pistol.";
     playMidiSfx("boost");
     game.wasBoosting = boost;
     beginPlayerAim(now);
     return;
+  }
+
+  if (game.level >= 2 && boostWindowLive && boostStarted && !game.boostCueHit && game.stamina < PERFECT_BOOST_COST) {
+    game.message = "Perfect Boost needs 50 stamina.";
   }
 
   if (boost && game.stamina > 0) {
@@ -219,6 +229,7 @@ function updateReaction(now) {
 
   if (waiting) {
     const remain = Math.ceil((game.signalAt - now) / 1000);
+    playCountdownBeep(remain);
     if (game.phase === "playerAim") {
       setPrompt("Steady", `Shoot after the signal. ${remain}`);
     } else {
@@ -228,6 +239,7 @@ function updateReaction(now) {
   }
 
   if (active) {
+    playCountdownBeep(0);
     if (game.phase === "playerAim") {
       setPrompt("Shoot", "Press Space or Xbox A now.", "hot");
     } else {
@@ -355,6 +367,7 @@ function beginPlayerAim(now) {
   game.signalAt = now + randomRange(820, 1750);
   game.reactionWindow = Math.max(250, 760 - game.level * 34);
   game.deadline = game.signalAt + game.reactionWindow;
+  game.lastCountdownBeep = null;
   game.message = "You grabbed the pistol. Do not shoot before the signal.";
   selectMusicForPhase("shoot");
 }
@@ -365,6 +378,7 @@ function beginEnemyAim(now) {
   game.signalAt = now + randomRange(780, 1680);
   game.reactionWindow = Math.max(270, 860 - game.level * 38);
   game.deadline = game.signalAt + game.reactionWindow;
+  game.lastCountdownBeep = null;
   game.message = "Opponent has the pistol. Dodge only after the signal.";
   selectMusicForPhase("bullet");
 }
@@ -918,6 +932,21 @@ function playMidiSfx(type) {
       { note: 64, start: 0.055, duration: 0.1, type: "square", gain: 0.15 },
       { note: 76, start: 0.13, duration: 0.16, type: "square", gain: 0.18 }
     ],
+    boostStart: [
+      { note: 45, start: 0, duration: 0.06, type: "sawtooth", gain: 0.11 },
+      { note: 57, start: 0.04, duration: 0.08, type: "sawtooth", gain: 0.12 }
+    ],
+    boostCuePress: [
+      { note: 57, start: 0, duration: 0.06, type: "square", gain: 0.14 },
+      { note: 69, start: 0.04, duration: 0.08, type: "square", gain: 0.16 }
+    ],
+    countdownHigh: [
+      { note: 76, start: 0, duration: 0.06, type: "square", gain: 0.1 }
+    ],
+    countdownLow: [
+      { note: 64, start: 0, duration: 0.07, type: "triangle", gain: 0.12 },
+      { note: 88, start: 0.055, duration: 0.05, type: "square", gain: 0.1 }
+    ],
     punch: [
       { note: 36, start: 0, duration: 0.12, type: "triangle", gain: 0.22 },
       { note: 43, start: 0.05, duration: 0.14, type: "square", gain: 0.16 }
@@ -927,6 +956,12 @@ function playMidiSfx(type) {
   for (const tone of patterns[type] || []) {
     playTone(now + tone.start, tone.duration, midiToFrequency(tone.note), tone.type, tone.gain * volume);
   }
+}
+
+function playCountdownBeep(value) {
+  if (game.lastCountdownBeep === value) return;
+  game.lastCountdownBeep = value;
+  playMidiSfx(value === 0 ? "countdownLow" : "countdownHigh");
 }
 
 function playTone(start, duration, frequency, waveType, peakGain) {
