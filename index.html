@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Suit Jitsu</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=audio-boost-4">
   </head>
   <body>
     <main class="shell">
@@ -27,6 +27,7 @@
             <span id="shotsLabel">Shots: 3</span>
             <span id="dodgesLabel">Dodges: 0/3</span>
             <span id="bestLabel">Best: --</span>
+            <button id="audioButton" class="audio-button" type="button">Audio</button>
           </div>
         </div>
 
@@ -35,6 +36,41 @@
           <span id="promptText">Press Space, Enter, or Xbox A to start.</span>
         </div>
 
+        <div class="boost-cue" id="boostCue" aria-live="polite">Boost</div>
+
+        <aside class="pause-menu" id="pauseMenu" aria-labelledby="pauseTitle" aria-modal="true" role="dialog" hidden>
+          <div class="pause-panel">
+            <div class="pause-header">
+              <h2 id="pauseTitle">Paused</h2>
+              <button id="resumeButton" type="button">Resume</button>
+            </div>
+            <div class="audio-grid">
+              <label class="toggle-row">
+                <span>Music</span>
+                <input id="musicToggle" type="checkbox" checked>
+              </label>
+              <label>
+                <span>Music Volume</span>
+                <input id="musicVolume" type="range" min="0" max="100" value="58">
+              </label>
+              <label>
+                <span>Sound Effects</span>
+                <input id="sfxVolume" type="range" min="0" max="100" value="74">
+              </label>
+              <label>
+                <span>Track</span>
+                <select id="trackSelect">
+                  <option value="auto">Auto</option>
+                  <option value="race">The Footrace</option>
+                  <option value="shoot">The High Ground Shooting</option>
+                  <option value="bullet">Bullet Time Bullets</option>
+                  <option value="lose">The Empty Holster</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        </aside>
+
         <div class="hud hud-bottom">
           <div id="statusText">Race to the laser pistol. Hold boost carefully.</div>
           <div class="controls">
@@ -42,11 +78,12 @@
             <span>Boost: Shift / RT</span>
             <span>Shoot: Space / A</span>
             <span>Dodge: S or Down / B</span>
+            <span>Pause: Esc / Menu</span>
           </div>
         </div>
       </section>
     </main>
 
-    <script src="game.js"></script>
+    <script src="game.js?v=audio-boost-4"></script>
   </body>
 </html>

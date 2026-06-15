@@ -9,6 +9,7 @@ Race suited martial artists across an indoor dojo track, manage stamina with boo
 - Start / shoot: `Space`, `Enter`, or Xbox `A`
 - Dodge: `S`, `ArrowDown`, or Xbox `B`
 - Boost while racing: `Shift`, `Ctrl`, Xbox `RT`, or Xbox `RB`
+- Pause and audio settings: `Esc`, `P`, Xbox `Menu`, or Xbox `View`
 
 Open `index.html` directly or serve the folder as a static site. No build step is required.
 
@@ -18,4 +19,4 @@ Publish this repository from the `main` branch root in GitHub Pages settings.
 
 ## Assets
 
-The dojo track, suited martial artist, and black laser pistol PNG assets were generated with the built-in ChatGPT image generation capability, then copied into `assets/` for local static use.
+The dojo track, suited martial artist, and black laser pistol PNG assets were generated with the built-in ChatGPT image generation capability, then copied into `assets/` for local static use. Music tracks live in `assets/Music/`; short MIDI-style laser, dodge, boost, and punch effects are synthesized in the browser.

@@ -11,7 +11,15 @@ const ui = {
   prompt: document.getElementById("prompt"),
   promptTitle: document.getElementById("promptTitle"),
   promptText: document.getElementById("promptText"),
-  statusText: document.getElementById("statusText")
+  statusText: document.getElementById("statusText"),
+  boostCue: document.getElementById("boostCue"),
+  pauseMenu: document.getElementById("pauseMenu"),
+  resumeButton: document.getElementById("resumeButton"),
+  musicToggle: document.getElementById("musicToggle"),
+  musicVolume: document.getElementById("musicVolume"),
+  sfxVolume: document.getElementById("sfxVolume"),
+  trackSelect: document.getElementById("trackSelect"),
+  audioButton: document.getElementById("audioButton")
 };
 
 const WIDTH = canvas.width;
@@ -30,6 +38,32 @@ const assets = {
 const keys = new Set();
 const lastPadButtons = new Map();
 let lastTime = performance.now();
+let audioContext = null;
+
+const musicTracks = {
+  race: {
+    title: "The Footrace",
+    src: "assets/Music/The Footrace.mp3"
+  },
+  shoot: {
+    title: "The High Ground Shooting",
+    src: "assets/Music/The High Ground Shooting.mp3"
+  },
+  bullet: {
+    title: "Bullet Time Bullets",
+    src: "assets/Music/Bullet Time Bullets.mp3"
+  },
+  lose: {
+    title: "The Empty Holster",
+    src: "assets/Music/The Empty Holster (Lose).mp3"
+  }
+};
+
+const music = new Audio();
+music.loop = true;
+music.preload = "auto";
+
+const audioSettings = loadAudioSettings();
 
 const game = {
   phase: "loading",
@@ -47,21 +81,35 @@ const game = {
   bestReaction: null,
   lastReaction: null,
   resultFlash: 0,
-  exhausted: false
+  exhausted: false,
+  paused: false,
+  pauseStarted: 0,
+  pendingRaceResetAt: 0,
+  boostCueAt: 0,
+  boostCueEnd: 0,
+  boostCueHit: false,
+  boostBurst: 0,
+  boostPromptUntil: 0,
+  currentMusicKey: ""
 };
 
-Promise.all(Object.values(assets).map((img) => img.decode().catch(() => null))).then(() => {
-  game.phase = "menu";
-  setPrompt("Suit Jitsu", "Press Space, Enter, or Xbox A to start.");
-  game.message = "Race to the laser pistol. Hold boost carefully.";
-  requestAnimationFrame(loop);
-});
+initAudioControls();
+game.phase = "menu";
+setPrompt("Suit Jitsu", "Press Space, Enter, or Xbox A to start.");
+game.message = "Race to the laser pistol. Hold boost carefully. Press Esc or P for audio.";
+selectMusicForPhase("menu");
+requestAnimationFrame(loop);
 
 window.addEventListener("keydown", (event) => {
+  if (["Space", "ArrowDown"].includes(event.code)) event.preventDefault();
+  if (!event.repeat && isPauseKey(event.code, event.key)) {
+    togglePause();
+    return;
+  }
   keys.add(event.code);
   if (!event.repeat) {
-    if (isShootKey(event.code)) handleAction("shoot");
-    if (isDodgeKey(event.code)) handleAction("dodge");
+    if (isShootKey(event.code, event.key)) handleAction("shoot");
+    if (isDodgeKey(event.code, event.key)) handleAction("dodge");
   }
 });
 
@@ -79,27 +127,43 @@ function loop(now) {
   const dt = Math.min(0.033, (now - lastTime) / 1000);
   lastTime = now;
   pollGamepads();
-  update(dt, now);
+  if (!game.paused) update(dt, now);
   draw(now);
   renderHud();
   requestAnimationFrame(loop);
 }
 
 function update(dt, now) {
+  if (game.pendingRaceResetAt && now >= game.pendingRaceResetAt) {
+    game.pendingRaceResetAt = 0;
+    resetRace();
+  }
   if (game.phase === "race") updateRace(dt, now);
   if (game.phase === "playerAim" || game.phase === "enemyAim") updateReaction(now);
   if (game.phase === "punch" && now - game.phaseStarted > 1450) nextOpponent();
   if (game.resultFlash > 0) game.resultFlash = Math.max(0, game.resultFlash - dt);
+  if (game.boostBurst > 0) game.boostBurst = Math.max(0, game.boostBurst - dt * 1.05);
 }
 
 function updateRace(dt, now) {
   const boost = isBoosting();
   const basePlayerSpeed = 246 + Math.min(42, game.level * 2);
-  const boostSpeed = boost && game.stamina > 0 ? 198 : 0;
-  const opponentSpeed = 208 + game.level * 27 + Math.min(70, game.level * 5);
+  const boostWindowLive = game.level >= 2 && now >= game.boostCueAt && now <= game.boostCueEnd;
+  const boostSpeed = boost && game.stamina > 0 ? 166 : 0;
+  const signalBurst = game.boostBurst > 0 ? 315 * game.boostBurst : 0;
+  const opponentSpeed = 214 + game.level * 41 + Math.min(120, game.level * 8);
+
+  if (game.level >= 2 && boostWindowLive && boost && !game.boostCueHit && game.stamina > 0) {
+    game.boostCueHit = true;
+    game.boostBurst = 1;
+    game.boostPromptUntil = now + 950;
+    game.stamina = Math.min(100, game.stamina + 10);
+    game.message = "Perfect boost. You broke the opponent's pace.";
+    playMidiSfx("boost");
+  }
 
   if (boost && game.stamina > 0) {
-    game.stamina -= 42 * dt;
+    game.stamina -= (boostWindowLive ? 16 : 42) * dt;
     if (game.stamina <= 0) {
       game.stamina = 0;
       game.exhausted = true;
@@ -110,7 +174,7 @@ function updateRace(dt, now) {
     game.stamina = Math.min(100, game.stamina + 8 * dt);
   }
 
-  game.playerX += (basePlayerSpeed + boostSpeed) * dt;
+  game.playerX += (basePlayerSpeed + boostSpeed + signalBurst) * dt;
   game.enemyX += opponentSpeed * dt;
 
   const playerDone = game.playerX >= TRACK_FINISH;
@@ -157,13 +221,16 @@ function updateReaction(now) {
 
 function handleAction(action) {
   const now = performance.now();
+  unlockAudio();
   if (game.phase === "loading") return;
+  if (game.paused) return;
   if (game.phase === "menu" || game.phase === "gameOver") {
     if (action === "shoot") startRun();
     return;
   }
 
   if (game.phase === "playerAim" && action === "shoot") {
+    playMidiSfx("shoot");
     if (now < game.signalAt) {
       missShot("False start. Your opponent dodged before the shot.");
       return;
@@ -184,6 +251,7 @@ function handleAction(action) {
       return;
     }
     if (now <= game.deadline) {
+      playMidiSfx("dodge");
       const reaction = Math.round(now - game.signalAt);
       game.lastReaction = reaction;
       game.bestReaction = game.bestReaction === null ? reaction : Math.min(game.bestReaction, reaction);
@@ -196,10 +264,11 @@ function handleAction(action) {
         game.message = `Clean dodge in ${reaction} ms. Race again for the pistol.`;
         setPrompt("Dodged", `${game.dodges}/3 dodges. Race resumes.`, "win");
         game.phase = "raceReset";
-        setTimeout(() => resetRace(), 850);
+        scheduleRaceReset(850);
       }
       return;
     }
+    playMidiSfx("shoot");
     die("Shot", "The dodge came too late.");
   }
 }
@@ -222,7 +291,20 @@ function resetRace() {
   game.playerX = TRACK_START;
   game.enemyX = TRACK_START;
   game.phaseStarted = performance.now();
-  game.message = `Opponent ${game.level}: reach the pistol first.`;
+  game.pendingRaceResetAt = 0;
+  game.boostBurst = 0;
+  game.boostCueHit = false;
+  game.boostPromptUntil = 0;
+  if (game.level >= 2) {
+    game.boostCueAt = game.phaseStarted + randomRange(760, 1650);
+    game.boostCueEnd = game.boostCueAt + Math.max(650, 1120 - game.level * 35);
+    game.message = `Opponent ${game.level}: faster pace. Boost only when signaled.`;
+  } else {
+    game.boostCueAt = 0;
+    game.boostCueEnd = 0;
+    game.message = `Opponent ${game.level}: reach the pistol first.`;
+  }
+  selectMusicForPhase("race");
   clearPrompt();
 }
 
@@ -233,6 +315,7 @@ function beginPlayerAim(now) {
   game.reactionWindow = Math.max(250, 760 - game.level * 34);
   game.deadline = game.signalAt + game.reactionWindow;
   game.message = "You grabbed the pistol. Do not shoot before the signal.";
+  selectMusicForPhase("shoot");
 }
 
 function beginEnemyAim(now) {
@@ -242,6 +325,7 @@ function beginEnemyAim(now) {
   game.reactionWindow = Math.max(270, 860 - game.level * 38);
   game.deadline = game.signalAt + game.reactionWindow;
   game.message = "Opponent has the pistol. Dodge only after the signal.";
+  selectMusicForPhase("bullet");
 }
 
 function missShot(reason) {
@@ -255,7 +339,7 @@ function missShot(reason) {
   game.message = `${reason} ${game.shotsLeft} shot chance${game.shotsLeft === 1 ? "" : "s"} left.`;
   setPrompt("Miss", "Resetting the race.", "hot");
   game.phase = "raceReset";
-  setTimeout(() => resetRace(), 950);
+  scheduleRaceReset(950);
 }
 
 function beginPunch(now, text) {
@@ -264,6 +348,7 @@ function beginPunch(now, text) {
   game.resultFlash = 0.8;
   game.message = `${text} Final punch finishes the duel.`;
   setPrompt("Knockout", "Advancing to the next opponent.", "win");
+  playMidiSfx("punch");
 }
 
 function nextOpponent() {
@@ -276,6 +361,7 @@ function die(title, text) {
   game.phase = "gameOver";
   game.message = text;
   setPrompt(title, `${text} Press Space, Enter, or Xbox A to restart.`, "hot");
+  selectMusicForPhase("lose");
 }
 
 function setPrompt(title, text, tone = "") {
@@ -301,6 +387,12 @@ function renderHud() {
   ui.dodgesLabel.textContent = `Dodges: ${game.dodges}/3`;
   ui.bestLabel.textContent = game.bestReaction === null ? "Best: --" : `Best: ${game.bestReaction} ms`;
   ui.statusText.textContent = game.message || "";
+
+  const now = performance.now();
+  const boostLive = game.phase === "race" && game.level >= 2 && now >= game.boostCueAt && now <= game.boostCueEnd;
+  const boostHitVisible = now < game.boostPromptUntil;
+  ui.boostCue.classList.toggle("visible", boostLive || boostHitVisible);
+  ui.boostCue.textContent = boostHitVisible && game.boostCueHit ? "Perfect Boost" : "Boost";
 }
 
 function draw(now) {
@@ -437,6 +529,10 @@ function drawEffects(now) {
     ctx.restore();
   }
 
+  if (game.phase === "race" && game.level >= 2 && game.boostCueAt) {
+    drawBoostWindow(now);
+  }
+
   if (game.resultFlash > 0) {
     ctx.save();
     ctx.globalAlpha = game.resultFlash * 0.22;
@@ -444,6 +540,23 @@ function drawEffects(now) {
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
     ctx.restore();
   }
+}
+
+function drawBoostWindow(now) {
+  const active = now >= game.boostCueAt && now <= game.boostCueEnd;
+  const hit = game.boostCueHit && now < game.boostPromptUntil;
+  if (!active && !hit) return;
+
+  const progress = active ? clamp((now - game.boostCueAt) / (game.boostCueEnd - game.boostCueAt), 0, 1) : 1;
+  ctx.save();
+  ctx.globalAlpha = active ? 0.95 : 0.75;
+  ctx.strokeStyle = hit ? "rgba(97, 214, 111, 0.96)" : "rgba(243, 197, 108, 0.92)";
+  ctx.lineWidth = 10;
+  ctx.beginPath();
+  ctx.moveTo(TRACK_START + 10, PLAYER_Y + 36);
+  ctx.lineTo(lerp(TRACK_START + 10, TRACK_FINISH - 10, 1 - progress), PLAYER_Y + 36);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawReactionArc(x, y, color) {
@@ -479,12 +592,16 @@ function pollGamepads() {
     if (!pad) continue;
     const a = buttonPressed(pad, 0);
     const b = buttonPressed(pad, 1);
+    const menu = buttonPressed(pad, 8) || buttonPressed(pad, 9);
     const prevA = lastPadButtons.get(`${pad.index}:0`) || false;
     const prevB = lastPadButtons.get(`${pad.index}:1`) || false;
+    const prevMenu = lastPadButtons.get(`${pad.index}:menu`) || false;
     if (a && !prevA) handleAction("shoot");
     if (b && !prevB) handleAction("dodge");
+    if (menu && !prevMenu) togglePause();
     lastPadButtons.set(`${pad.index}:0`, a);
     lastPadButtons.set(`${pad.index}:1`, b);
+    lastPadButtons.set(`${pad.index}:menu`, menu);
   }
 }
 
@@ -506,12 +623,203 @@ function isBoosting() {
   return false;
 }
 
-function isShootKey(code) {
-  return code === "Space" || code === "Enter" || code === "KeyX";
+function isShootKey(code, key = "") {
+  return code === "Space" || code === "Enter" || code === "KeyX" || key === " " || key === "Enter" || key.toLowerCase() === "x";
 }
 
-function isDodgeKey(code) {
-  return code === "ArrowDown" || code === "KeyS" || code === "KeyB";
+function isDodgeKey(code, key = "") {
+  return code === "ArrowDown" || code === "KeyS" || code === "KeyB" || key === "ArrowDown" || key.toLowerCase() === "s" || key.toLowerCase() === "b";
+}
+
+function isPauseKey(code, key = "") {
+  const normalizedKey = key.toLowerCase();
+  return code === "Escape" || code === "KeyP" || normalizedKey === "escape" || normalizedKey === "esc" || normalizedKey === "p";
+}
+
+function scheduleRaceReset(delayMs) {
+  game.pendingRaceResetAt = performance.now() + delayMs;
+}
+
+function togglePause(force) {
+  if (game.phase === "loading") return;
+  const nextPaused = typeof force === "boolean" ? force : !game.paused;
+  if (nextPaused === game.paused) return;
+  setPaused(nextPaused);
+}
+
+function setPaused(paused) {
+  const now = performance.now();
+  game.paused = paused;
+  ui.pauseMenu.hidden = !paused;
+
+  if (paused) {
+    game.pauseStarted = now;
+  } else {
+    const pausedFor = now - game.pauseStarted;
+    game.phaseStarted += pausedFor;
+    game.signalAt += pausedFor;
+    game.deadline += pausedFor;
+    game.boostCueAt += pausedFor;
+    game.boostCueEnd += pausedFor;
+    game.boostPromptUntil += pausedFor;
+    if (game.pendingRaceResetAt) game.pendingRaceResetAt += pausedFor;
+    game.pauseStarted = 0;
+    lastTime = now;
+    unlockAudio();
+  }
+}
+
+function initAudioControls() {
+  ui.musicToggle.checked = audioSettings.musicEnabled;
+  ui.musicVolume.value = String(Math.round(audioSettings.musicVolume * 100));
+  ui.sfxVolume.value = String(Math.round(audioSettings.sfxVolume * 100));
+  ui.trackSelect.value = audioSettings.trackKey;
+
+  ui.resumeButton.addEventListener("click", () => setPaused(false));
+  ui.audioButton.addEventListener("click", () => togglePause(true));
+  ui.musicToggle.addEventListener("change", () => {
+    audioSettings.musicEnabled = ui.musicToggle.checked;
+    applyAudioSettings(true);
+  });
+  ui.musicVolume.addEventListener("input", () => {
+    audioSettings.musicVolume = Number(ui.musicVolume.value) / 100;
+    applyAudioSettings(false);
+  });
+  ui.sfxVolume.addEventListener("input", () => {
+    audioSettings.sfxVolume = Number(ui.sfxVolume.value) / 100;
+    saveAudioSettings();
+  });
+  ui.trackSelect.addEventListener("change", () => {
+    audioSettings.trackKey = ui.trackSelect.value;
+    applyAudioSettings(true);
+  });
+
+  applyAudioSettings(false);
+}
+
+function loadAudioSettings() {
+  const defaults = {
+    musicEnabled: true,
+    musicVolume: 0.58,
+    sfxVolume: 0.74,
+    trackKey: "auto"
+  };
+
+  try {
+    const stored = JSON.parse(localStorage.getItem("suitJitsuAudio") || "null");
+    return { ...defaults, ...(stored || {}) };
+  } catch {
+    return defaults;
+  }
+}
+
+function saveAudioSettings() {
+  try {
+    localStorage.setItem("suitJitsuAudio", JSON.stringify(audioSettings));
+  } catch {
+    // Settings persistence is optional; the game should continue if storage is blocked.
+  }
+}
+
+function applyAudioSettings(restartTrack) {
+  music.volume = clamp(audioSettings.musicVolume, 0, 1);
+  saveAudioSettings();
+
+  if (!audioSettings.musicEnabled) {
+    music.pause();
+    return;
+  }
+
+  if (restartTrack) {
+    selectMusicForPhase(currentAutoMusicKey());
+  } else if (music.src && audioContext) {
+    music.play().catch(() => {});
+  }
+}
+
+function currentAutoMusicKey() {
+  if (game.phase === "playerAim" || game.phase === "punch") return "shoot";
+  if (game.phase === "enemyAim") return "bullet";
+  if (game.phase === "gameOver") return "lose";
+  return "race";
+}
+
+function selectMusicForPhase(phaseKey) {
+  const key = audioSettings.trackKey === "auto" ? phaseKey : audioSettings.trackKey;
+  const track = musicTracks[key] || musicTracks.race;
+  if (game.currentMusicKey !== key || !music.src) {
+    game.currentMusicKey = key;
+    music.src = track.src;
+  }
+  music.volume = clamp(audioSettings.musicVolume, 0, 1);
+  if (audioSettings.musicEnabled && audioContext) {
+    music.play().catch(() => {});
+  }
+}
+
+function unlockAudio() {
+  if (!audioContext) {
+    const AudioCtor = window.AudioContext || window.webkitAudioContext;
+    if (AudioCtor) audioContext = new AudioCtor();
+  }
+  if (audioContext && audioContext.state === "suspended") {
+    audioContext.resume().catch(() => {});
+  }
+  if (audioSettings.musicEnabled && music.src) {
+    music.play().catch(() => {});
+  }
+}
+
+function playMidiSfx(type) {
+  if (!audioSettings.sfxVolume) return;
+  unlockAudio();
+  if (!audioContext) return;
+
+  const now = audioContext.currentTime;
+  const volume = clamp(audioSettings.sfxVolume, 0, 1);
+  const patterns = {
+    shoot: [
+      { note: 88, start: 0, duration: 0.07, type: "square", gain: 0.26 },
+      { note: 76, start: 0.035, duration: 0.11, type: "sawtooth", gain: 0.18 },
+      { note: 40, start: 0, duration: 0.08, type: "triangle", gain: 0.16 }
+    ],
+    dodge: [
+      { note: 67, start: 0, duration: 0.08, type: "triangle", gain: 0.18 },
+      { note: 74, start: 0.055, duration: 0.08, type: "triangle", gain: 0.16 },
+      { note: 83, start: 0.11, duration: 0.09, type: "triangle", gain: 0.14 }
+    ],
+    boost: [
+      { note: 52, start: 0, duration: 0.08, type: "square", gain: 0.13 },
+      { note: 64, start: 0.055, duration: 0.1, type: "square", gain: 0.15 },
+      { note: 76, start: 0.13, duration: 0.16, type: "square", gain: 0.18 }
+    ],
+    punch: [
+      { note: 36, start: 0, duration: 0.12, type: "triangle", gain: 0.22 },
+      { note: 43, start: 0.05, duration: 0.14, type: "square", gain: 0.16 }
+    ]
+  };
+
+  for (const tone of patterns[type] || []) {
+    playTone(now + tone.start, tone.duration, midiToFrequency(tone.note), tone.type, tone.gain * volume);
+  }
+}
+
+function playTone(start, duration, frequency, waveType, peakGain) {
+  const osc = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+  osc.type = waveType;
+  osc.frequency.setValueAtTime(frequency, start);
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, peakGain), start + 0.012);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  osc.connect(gain);
+  gain.connect(audioContext.destination);
+  osc.start(start);
+  osc.stop(start + duration + 0.02);
+}
+
+function midiToFrequency(note) {
+  return 440 * Math.pow(2, (note - 69) / 12);
 }
 
 function randomRange(min, max) {
