@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Suit Jitsu</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="game-wrap" aria-label="Suit Jitsu game">
+        <canvas id="game" width="1280" height="720" aria-label="Suit Jitsu playfield"></canvas>
+
+        <div class="hud hud-top" aria-live="polite">
+          <div class="brand-block">
+            <h1>Suit Jitsu</h1>
+            <p id="roundLabel">Opponent 1</p>
+          </div>
+          <div class="meter-group">
+            <div class="meter-label">
+              <span>Stamina</span>
+              <strong id="staminaValue">100%</strong>
+            </div>
+            <div class="meter"><div id="staminaBar" class="meter-fill"></div></div>
+          </div>
+          <div class="score-strip">
+            <span id="shotsLabel">Shots: 3</span>
+            <span id="dodgesLabel">Dodges: 0/3</span>
+            <span id="bestLabel">Best: --</span>
+          </div>
+        </div>
+
+        <div class="prompt" id="prompt">
+          <strong id="promptTitle">Suit Jitsu</strong>
+          <span id="promptText">Press Space, Enter, or Xbox A to start.</span>
+        </div>
+
+        <div class="hud hud-bottom">
+          <div id="statusText">Race to the laser pistol. Hold boost carefully.</div>
+          <div class="controls">
+            <span>Move: auto sprint</span>
+            <span>Boost: Shift / RT</span>
+            <span>Shoot: Space / A</span>
+            <span>Dodge: S or Down / B</span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="game.js"></script>
+  </body>
+</html>

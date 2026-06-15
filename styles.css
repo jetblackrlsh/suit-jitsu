@@ -1,0 +1,248 @@
+:root {
+  color-scheme: dark;
+  --ink: #f8f3e7;
+  --muted: #c9bfae;
+  --panel: rgba(13, 13, 12, 0.76);
+  --panel-strong: rgba(8, 8, 8, 0.92);
+  --line: rgba(255, 255, 255, 0.16);
+  --red: #d44b35;
+  --gold: #f3c56c;
+  --blue: #5cc8ff;
+  --green: #61d66f;
+  --danger: #ff5f53;
+  --shadow: rgba(0, 0, 0, 0.46);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(212, 75, 53, 0.18), transparent 32rem),
+    linear-gradient(180deg, #161311, #080807 72%);
+  color: var(--ink);
+  overflow: hidden;
+}
+
+.shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.game-wrap {
+  position: relative;
+  width: min(100%, 1280px);
+  aspect-ratio: 16 / 9;
+  max-height: calc(100vh - 36px);
+  overflow: hidden;
+  background: #080807;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 28px 70px var(--shadow);
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.hud {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.hud-top {
+  top: 14px;
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) minmax(220px, 360px) minmax(260px, auto);
+  gap: 14px;
+  align-items: start;
+}
+
+.brand-block,
+.meter-group,
+.score-strip,
+.hud-bottom,
+.prompt {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(8px);
+}
+
+.brand-block {
+  padding: 11px 14px;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(1.25rem, 2.2vw, 2rem);
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.brand-block p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.meter-group {
+  padding: 11px 12px 13px;
+}
+
+.meter-label,
+.score-strip {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+
+.meter-label strong {
+  color: var(--ink);
+}
+
+.meter {
+  height: 12px;
+  margin-top: 8px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.meter-fill {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, var(--green), var(--gold));
+  transition: width 120ms linear, background-color 120ms linear;
+}
+
+.score-strip {
+  align-items: center;
+  padding: 11px 13px;
+  flex-wrap: wrap;
+}
+
+.prompt {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  top: 23%;
+  transform: translateX(-50%);
+  min-width: min(420px, calc(100% - 44px));
+  max-width: min(560px, calc(100% - 44px));
+  padding: 16px 20px;
+  text-align: center;
+}
+
+.prompt strong {
+  display: block;
+  font-size: clamp(1.25rem, 2.5vw, 2.4rem);
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.prompt span {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.prompt.hot {
+  border-color: rgba(255, 95, 83, 0.68);
+  background: rgba(65, 12, 10, 0.86);
+}
+
+.prompt.win {
+  border-color: rgba(97, 214, 111, 0.72);
+  background: rgba(10, 49, 20, 0.84);
+}
+
+.hud-bottom {
+  bottom: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+#statusText {
+  color: var(--ink);
+  min-width: 14rem;
+}
+
+.controls {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.controls span {
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  body {
+    overflow: auto;
+  }
+
+  .shell {
+    align-items: start;
+    padding: 8px;
+  }
+
+  .game-wrap {
+    margin-top: 12px;
+  }
+
+  .hud {
+    left: 8px;
+    right: 8px;
+  }
+
+  .hud-top {
+    top: 8px;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .score-strip {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
+  .prompt {
+    top: 30%;
+    padding: 12px 14px;
+  }
+
+  .hud-bottom {
+    bottom: 8px;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .controls {
+    justify-content: flex-start;
+    gap: 7px 10px;
+  }
+}
